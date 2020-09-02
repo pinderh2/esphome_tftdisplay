@@ -1,0 +1,85 @@
+# Example .configuration file that uses the
+# Adafruit 160x128 tft color display
+#
+# This display requires the ESP32, and will not work with the 
+#  ESP8266 (at least, not with released code) due to the lack
+#  of adequate RAM.
+#
+substitutions:
+  devicename: garage_display
+  friendly_name: Garage Display
+  device_description: Garage door state display by door
+
+esphome:
+  name: $devicename
+  comment: ${device_description}
+  platform: ESP32
+  board: esp32doit-devkit-v1
+
+wifi:
+  ssid: "YOUR_SSID"
+  password: "YOUR_PASSWORD"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "SSID"
+    password: "PASSWORD"
+
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+ota:
+
+spi:    # Use VSPI
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+sensor:
+  - platform: uptime
+    name: "${friendly_name} Uptime"
+    id: my_uptime
+
+  - platform: wifi_signal
+    name: "${friendly_name} WiFi Signal"
+    update_interval: 60s
+    id: my_wifi_signal
+
+text_sensor:
+  - platform: version
+    name: "${friendly_name} ESPHome version"
+    id: my_version
+
+# This is an example sensor from Home Assistant that will
+#    be monitored
+binary_sensor:
+  - platform: homeassistant
+    entity_id: binary_sensor.g1_isclosed
+    id: garage1_closed
+
+# Place this font file in the same folder as this .yaml file
+font:
+  - file: 'OpenSans-Regular.ttf'
+    id: font1
+    size: 10
+
+display:
+  - platform: st7735
+    cs_pin: GPIO16   # These are arbitrarily chosen GPIOs
+    dc_pin: GPIO17
+    reset_pin: GPIO21
+    rotation: 90     # Needed for landscape mode
+    lambda: |-
+      it.print(5, 10, id(font1), "Hello there.");
+      it.printf(5, 30, id(font1), "%s", id(my_version).state.c_str() );
+      it.printf(5, 50, id(font1), "Wifi: %2.1f  Uptime: %.1f", id(my_wifi_signal).state, id(my_uptime).state/3600);
+      if(id(garage1_closed).state) {
+          it.printf(5, 80, id(font1), "Garage Door Closed");
+      } else {
+          it.printf(5, 80, id(font1), "Garage Door Open");
+      }

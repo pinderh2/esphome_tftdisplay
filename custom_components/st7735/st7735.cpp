@@ -176,8 +176,8 @@ void ST7735::setup() {
 
 void ST7735::write_display_data() {
   
-  uint16_t offsetx = 26; 
-  uint16_t offsety = 1; 
+  uint16_t offsetx = 0; 
+  uint16_t offsety = 0; 
 
   uint16_t x1 = offsetx;
   uint16_t x2 = x1 + get_width_internal()-1;
@@ -259,7 +259,7 @@ void ST7735::loop() {
 }
 
 int ST7735::get_width_internal() {
-	return 80;
+	return 128;
 }
 
 int ST7735::get_height_internal() {

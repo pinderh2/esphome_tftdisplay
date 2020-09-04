@@ -22,7 +22,7 @@ Some things I learned along the way:
    - cd esphome_dev
    - git clone https://github.com/esphome/esphome.git
    - cd ..
-   - pip install esphome_dev 
+   - pip install ./esphome_dev 
 2) My display uses BRG instead of RGB, but luckily Color supports this via to_bgr_565() 
    method.
 3) My display does not require color inversion.

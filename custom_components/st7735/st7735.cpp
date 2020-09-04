@@ -109,9 +109,10 @@ static const uint8_t PROGMEM
         0x8A, 0xEE,
         ST7735_VMCTR1,  1,              // 12: Power control, 1 arg, no delay:
         0x0E,
-        ST77XX_INVOFF,  0,              // 13: Don't invert display, no args
+        ST77XX_INVOFF,  0,            // 13: Invert display, no args
+        
         ST77XX_MADCTL,  1,              // 14: Mem access ctl (directions), 1 arg:
-        0xC8,                         //     row/col addr, bottom-top refresh
+    	0xC8,                         //     row/col addr, bottom-top refresh
         ST77XX_COLMOD,  1,              // 15: set color mode, 1 arg, no delay:
         0x05 },                       //     16-bit color
 
@@ -146,7 +147,8 @@ static const uint8_t PROGMEM
         ST77XX_NORON,     ST_CMD_DELAY, //  3: Normal display on, no args, w/delay
         10,                           //     10 ms delay
         ST77XX_DISPON,    ST_CMD_DELAY, //  4: Main screen turn on, no args w/delay
-        100 };                        //     100 ms delay        
+        100,                            //     100 ms delay  
+ };                              
 
 static const char *TAG = "st7735";
 
@@ -160,7 +162,6 @@ void ST7735::setup() {
   this->displayInit(Rcmd1);
   this->displayInit(Rcmd2green);
   this->displayInit(Rcmd3);
-  this->writecommand(ST7735_INVON);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //this->disable();
@@ -270,18 +271,14 @@ size_t ST7735::get_buffer_length_() {
   return size_t(this->get_width_internal()) * size_t(this->get_height_internal()) * 2;
 }
 
-void HOT ST7735::draw_absolute_pixel_internal(int x, int y, int color) {
+void HOT ST7735::draw_absolute_pixel_internal(int x, int y, Color color) {
 	if (x >= this->get_width_internal() || x < 0 || y >= this->get_height_internal() || y < 0)
 		return;
 
-  if (color == display::COLOR_ON) {
-    color = ST7735_WHITE;
-  } else if (color == display::COLOR_OFF) {
-    color = ST7735_BLACK;
-  }
+    uint32_t color_int = color.to_bgr_565();
 	uint16_t pos = (x + y * this->get_width_internal())*2;
-	this->buffer_[pos++] = (color>>8) & 0xff;
-	this->buffer_[pos] = color & 0xff;
+	this->buffer_[pos++] = (color_int>>8) & 0xff;
+	this->buffer_[pos] = color_int & 0xff;
 }
 
 void ST7735::displayInit(const uint8_t *addr) {
@@ -348,7 +345,6 @@ void ST7735::senddata(const uint8_t* dataBytes, uint8_t numDataBytes) {
   }
   this->cs_->digital_write(true);
   this->disable();
-
 }
 
 }  // namespace st7735

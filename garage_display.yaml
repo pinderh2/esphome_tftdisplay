@@ -42,17 +42,14 @@ spi:    # Use VSPI
 
 sensor:
   - platform: uptime
-    name: "${friendly_name} Uptime"
     id: my_uptime
 
   - platform: wifi_signal
-    name: "${friendly_name} WiFi Signal"
     update_interval: 60s
     id: my_wifi_signal
 
 text_sensor:
   - platform: version
-    name: "${friendly_name} ESPHome version"
     id: my_version
 
 # This is an example sensor from Home Assistant that will
@@ -61,13 +58,33 @@ binary_sensor:
   - platform: homeassistant
     entity_id: binary_sensor.g1_isclosed
     id: garage1_closed
+  - platform: homeassistant
+    entity_id: binary_sensor.g2_isclosed
+    id: garage2_closed
 
 # Place this font file in the same folder as this .yaml file
 font:
   - file: 'OpenSans-Regular.ttf'
     id: font1
     size: 10
+  - file: 'OpenSans-Regular.ttf'
+    id: font2
+    size: 24
 
+image:
+  - file: "garage1_open.png"
+    id: img_garage1_open
+    type: RGB24
+  - file: "garage1_closed.png"
+    id: img_garage1_closed
+    type: RGB24
+  - file: "garage2_open.png"
+    id: img_garage2_open
+    type: RGB24
+  - file: "garage2_closed.png"
+    id: img_garage2_closed
+    type: RGB24
+ 
 display:
   - platform: st7735
     cs_pin: GPIO16   # These are arbitrarily chosen GPIOs
@@ -75,11 +92,17 @@ display:
     reset_pin: GPIO21
     rotation: 90     # Needed for landscape mode
     lambda: |-
-      it.print(5, 10, id(font1), "Hello there.");
-      it.printf(5, 30, id(font1), "%s", id(my_version).state.c_str() );
-      it.printf(5, 50, id(font1), "Wifi: %2.1f  Uptime: %.1f", id(my_wifi_signal).state, id(my_uptime).state/3600);
-      if(id(garage1_closed).state) {
-          it.printf(5, 80, id(font1), "Garage Door Closed");
+      if(id(garage1_closed).state && id(garage2_closed).state) {
+         it.print(1, 5, id(font2), Color(0,255,0), "Garage Closed");
       } else {
-          it.printf(5, 80, id(font1), "Garage Door Open");
+         it.print(5, 5, id(font2), Color(255,0,0), "Garage Open");
       }
+      it.image(  4,44,id(garage1_closed).state ? id(img_garage1_closed) : id(img_garage1_open));
+      it.image(100,44,id(garage2_closed).state ? id(img_garage2_closed) : id(img_garage2_open));
+      it.printf(5, 115, id(font1), Color(255,255,0), "Wifi: %2.1f  Uptime: %.1f", id(my_wifi_signal).state, id(my_uptime).state/3600);
+
+status_led:
+  pin:
+    number: GPIO2
+    inverted: False
+

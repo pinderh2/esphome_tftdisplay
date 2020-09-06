@@ -1,1 +1,6 @@
 .DS_Store
+.esphome/
+OpenSans-Regular.ttf
+custom_components/st7735/__pycache__/
+garage_display/
+secrets.yaml

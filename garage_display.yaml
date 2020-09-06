@@ -17,13 +17,13 @@ esphome:
   board: esp32doit-devkit-v1
 
 wifi:
-  ssid: "YOUR_SSID"
-  password: "YOUR_PASSWORD"
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
-    ssid: "SSID"
-    password: "PASSWORD"
+    ssid: !secret ap_ssid
+    password: !secret ap_password
 
 captive_portal:
 

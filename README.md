@@ -18,11 +18,10 @@ You will need to fetch the font file and put it in that same folder.
 Some things I learned along the way:
 
 1) To work with the latest /dev branch of esphome:
-   - mkdir esphome_dev
-   - cd esphome_dev
+   ```
    - git clone https://github.com/esphome/esphome.git
-   - cd ..
-   - pip install esphome_dev 
+   - pip install ./esphome
+   ```
 2) My display uses BRG instead of RGB, but luckily Color supports this via to_bgr_565() 
    method.
 3) My display does not require color inversion.

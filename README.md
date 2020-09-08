@@ -22,7 +22,7 @@ Some things I learned along the way:
    - git clone https://github.com/esphome/esphome.git
    - pip install ./esphome
    ```
-2) My display uses BRG instead of RGB, but luckily Color supports this via to_bgr_565() 
+2) My display uses BGR instead of RGB, but luckily Color supports this via to_bgr_565() 
    method.
 3) My display does not require color inversion.
 4) The project works on a ESP32, but not ESP8266, because of RAM issues.

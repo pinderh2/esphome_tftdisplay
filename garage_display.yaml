@@ -178,7 +178,7 @@ display:
          //   If button has been pressed in last 60 seconds, then assume the
          //   latest change was due to that button press.
          it.print(1, 117, id(font1), "How");
-         it.print(35 + 73*i, 117, id(font1), time_since_last_button[i] > 10 ? "Remote" : "Button");
+         it.print(35 + 73*i, 117, id(font1), time_since_last_button[i] > 60 ? "Remote" : "Button");
       }
 
 

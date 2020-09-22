@@ -51,22 +51,19 @@ sensor:
 text_sensor:
   - platform: version
     id: my_version
-
-time:
   - platform: homeassistant
-    id: homeassistant_time
+    entity_id: sensor.lastg1reason
+    id: last_g1_reason
+  - platform: homeassistant
+    entity_id: sensor.lastg1time
+    id: last_g1_time
+  - platform: homeassistant
+    entity_id: sensor.lastg2reason
+    id: last_g2_reason
+  - platform: homeassistant
+    entity_id: sensor.lastg2time
+    id: last_g2_time
 
-globals:
-  - id: g1_button_time   # stores a timestamp of when the Garage 1 button was last pressed
-    type: long
-    restore_value: no
-    initial_value: '0'
-  - id: g2_button_time
-    type: long
-    restore_value: no
-    initial_value: '0'
-    
-# These are sensors from Home Assistant that will be monitored
 binary_sensor:
   - platform: homeassistant
     entity_id: binary_sensor.g1_isclosed
@@ -74,20 +71,6 @@ binary_sensor:
   - platform: homeassistant
     entity_id: binary_sensor.g2_isclosed
     id: garage2_closed
-  - platform: homeassistant
-    entity_id: binary_sensor.g1_ispressed
-    id: garage1_pressed
-    on_state:
-      then:       # store the timestamp
-        - lambda: |-
-             id(g1_button_time) = id(homeassistant_time).now().timestamp;
-  - platform: homeassistant
-    entity_id: binary_sensor.g2_ispressed
-    id: garage2_pressed
-    on_state:
-      then:
-        - lambda: |-
-             id(g2_button_time) = id(homeassistant_time).now().timestamp;
 
 # Place this font file in the same folder as this .yaml file
 font:
@@ -145,8 +128,9 @@ display:
       }
       
       // Place the open/closed icons (i.e. images)
-      it.image(  4,44,id(garage1_closed).state ? id(img_garage1_closed) : id(img_garage1_open));
-      it.image(100,44,id(garage2_closed).state ? id(img_garage2_closed) : id(img_garage2_open));
+      // Garage1 image is 95x60 pixels   Garage2 image is 56x60
+      it.image(  4,42,id(garage1_closed).state ? id(img_garage1_closed) : id(img_garage1_open));
+      it.image(100,42,id(garage2_closed).state ? id(img_garage2_closed) : id(img_garage2_open));
       
       // Display the WiFi signal strength
       float rssi = id(my_wifi_signal).state;
@@ -155,33 +139,12 @@ display:
                       (rssi<-50) ? id(wifi2) :
                                    id(wifi3));
       
-      // Keep track of the last time a garage opened or closed, and display that time
-      static int last_garage_state[2] = {0,0};
-      static char garage_msg[2][8] = {"xx:xx", "xx:xx"};
-      static int time_since_last_button[2] = {0,0};
-      int current_garage_state[2] = {id(garage1_closed).state, id(garage2_closed).state};
-      long last_garage_button_time[2] = {id(g1_button_time), id(g2_button_time)};
-      auto time = id(homeassistant_time).now();
-      for (int i = 0; i < 2; i++)
-      {
-         // Update the garage message with the current time, if state has changed
-         if (last_garage_state[i] != current_garage_state[i]) {
-            snprintf(garage_msg[i], 8, "%02d:%02d", time.hour, time.minute);
-            // capture how long it has been since last button press - used below.
-            time_since_last_button[i] = time.timestamp - last_garage_button_time[i];
-            last_garage_state[i] = current_garage_state[i];
-         }
-         // Display the current garage message, regardless of any state change
-         it.print(1, 104, id(font1), "When");
-         it.print(39 + 76*i, 104, id(font1), garage_msg[i]);
-         // Display the 'reason' for the last garage state change - i.e. button or remote.
-         //   If button has been pressed in last 60 seconds, then assume the
-         //   latest change was due to that button press.
-         it.print(1, 117, id(font1), "How");
-         it.print(35 + 73*i, 117, id(font1), time_since_last_button[i] > 60 ? "Remote" : "Button");
-      }
-
-
+      // Place the time and reason codes for the two garage doors
+      // Horizontal position is the middle of each of the .png images
+      it.print( 51, 102, id(font1), TextAlign::TOP_CENTER, id(last_g1_time).state.c_str());
+      it.print(128, 102, id(font1), TextAlign::TOP_CENTER, id(last_g2_time).state.c_str());
+      it.print( 51, 115, id(font1), TextAlign::TOP_CENTER, id(last_g1_reason).state.c_str());
+      it.print(128, 115, id(font1), TextAlign::TOP_CENTER, id(last_g2_reason).state.c_str());
 
 status_led:
   pin:

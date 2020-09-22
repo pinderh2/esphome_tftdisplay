@@ -1,0 +1,376 @@
+#
+# This is the garage door sensor module.
+# It also has relays that will trigger the garages to open/close
+#
+esphome:
+  name: garage_doors
+  platform: ESP8266
+  board: d1_mini
+  on_boot:
+    # This initializes the text that will be displayed on the garage monitor.
+    # TODO: figure out how to make these 4 elements revert to their previous state after a reboot
+    then:
+      - lambda: |-
+           id(last_g1_reason).publish_state("------ (-)");
+           id(last_g2_reason).publish_state("------ (-)");
+           id(last_g1_time).publish_state("--:--");
+           id(last_g2_time).publish_state("--:--");
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Garage Doors"
+    password: "BedYKgo9wH4x"
+
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+ota:
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    # At midnight, reset the counters that keep track of how many times the doors closed,
+    #  and update the texts to be displayed on the garage display.
+    on_time:
+      - seconds: 0
+        minutes: 0
+        hours: 0
+        then:
+          - lambda: |-
+             id(g1_closures) = 0;
+             id(g2_closures) = 0;
+             char tmp[15];
+             strncpy(tmp, id(last_g1_reason).state.c_str(), 7);
+             strcpy(tmp+7, "(0)");
+             id(last_g1_reason).publish_state(tmp);
+             strncpy(tmp, id(last_g2_reason).state.c_str(), 7);
+             strcpy(tmp+7, "(0)");
+             id(last_g2_reason).publish_state(tmp);
+             
+
+# These are short text elements that describe the last garage door open/close
+#  event, and are intended to be displayed on the Garage Display.
+text_sensor:
+  - platform: template
+    name: "LastG1Reason"
+    id: last_g1_reason
+  - platform: template
+    name: "LastG2Reason"
+    id: last_g2_reason
+  - platform: template
+    name: "LastG1Time"
+    id: last_g1_time
+  - platform: template
+    name: "LastG2Time"
+    id: last_g2_time
+
+
+globals:
+  - id: g1_button_time   # stores a timestamp of when the Garage 1 button was last pressed
+    type: long
+    restore_value: no
+    initial_value: '0'
+  - id: g2_button_time
+    type: long
+    restore_value: no
+    initial_value: '0'
+  - id: g1_command_time   # stores a timestamp of when the Garage 1 command was issued from HA
+    type: long
+    restore_value: no
+    initial_value: '0'
+  - id: g2_command_time
+    type: long
+    restore_value: no
+    initial_value: '0'
+  - id: g1_closures    # keeps track of how many times the door has closed
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: g2_closures
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+binary_sensor:
+# These are two identical sections for the two garage doors.
+# The purpose is to detect if someone has pressed the local pushbutton
+#  to open or close the doors.
+# A debounce time of 50 mS is used.
+# Because this is a binary_sensor, the event is available to Home Assistant,
+#  which can log it or do whatever else is appropriate.
+# Also, this triggers a local sequence that momentarily drives the relay
+#  connected to the garage door motor, which activates the door.
+#
+  - platform: gpio
+    name: "G2_IsPressed"
+    id: g2_is_pressed
+    pin:
+      number: D2
+      inverted: True
+      mode: INPUT_PULLUP
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+    on_press:
+      then:
+        - lambda: |-
+             id(g2_button_time) = id(homeassistant_time).now().timestamp;
+        - output.turn_on: gpio_g2_trig
+        - output.turn_on: gpio_enable_relay 
+        - delay: 0.4s
+        - output.turn_off: gpio_g2_trig
+        - output.turn_off: gpio_enable_relay
+  - platform: gpio
+    name: "G1_IsPressed"
+    id: g1_is_pressed
+    pin:
+      number: D6
+      inverted: True
+      mode: INPUT_PULLUP
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+    on_press:
+      then:
+        - lambda: |-
+             id(g1_button_time) = id(homeassistant_time).now().timestamp;
+        - output.turn_on: gpio_g1_trig
+        - output.turn_on: gpio_enable_relay 
+        - delay: 0.4s
+        - output.turn_off: gpio_g1_trig
+        - output.turn_off: gpio_enable_relay
+#
+# These are two inputs that detect if the door is closed or not.
+# These are also exposed to Home Assistant via the 'cover' elements below.
+#
+  - platform: gpio
+    name: "G1_IsClosed"
+    id: g1_is_closed
+    pin:
+      number: D5
+      inverted: True
+      mode: INPUT_PULLUP
+    filters:
+      - delayed_on: 100ms
+      - delayed_off: 100ms
+    on_press:
+      then:
+        - lambda: |-
+             id(g1_closures) += 1;
+    on_state:
+      # Update the display messages for any open/close state change.
+      then:
+        - lambda: |-
+             auto time = id(homeassistant_time).now();
+             char garage_time[10];
+             char garage_source[7];  /* limit these 'source' messages to 6 characters */
+             char garage_reason[15];
+        
+             // If both button and command times are more the 40 seconds ago,
+             //  then this must have been caused by neither, i.e. a remote.
+             if ((time.timestamp - id(g1_button_time) > 40) &&
+                 (time.timestamp - id(g1_command_time) > 40) )
+                 strncpy(garage_source, "Remote", 7);
+             else if (id(g1_button_time) - id(g1_command_time) > 0)
+                 strncpy(garage_source, "Button", 7);
+             else
+                 strncpy(garage_source, "HA_cmd", 7);
+             snprintf(garage_reason, 15, "%s (%d)", garage_source, id(g1_closures));
+
+             auto hour = time.hour;
+             int is_pm = (hour >= 12) ? 1 : 0;
+             if (hour == 0) hour = 12;
+             else if (hour > 12) hour -= 12;
+             if (time.is_valid()) {
+                snprintf(garage_time, 10, "%02d:%02d %s", hour, time.minute,
+                    is_pm ? "PM" : "AM");
+             } else {
+                snprintf(garage_time, 10, "--:--"); 
+             }
+             id(last_g1_time).publish_state(garage_time);
+             id(last_g1_reason).publish_state(garage_reason);
+
+  - platform: gpio
+    name: "G2_IsClosed"
+    id: g2_is_closed
+    pin:
+      number: D7
+      inverted: True
+      mode: INPUT_PULLUP
+    filters:
+      - delayed_on: 100ms
+      - delayed_off: 100ms
+    on_press:
+      then:
+        - lambda: |-
+             id(g2_closures) += 1;
+    on_state:
+      then:
+        # TODO: figure out a way to write this code once, and call it from these lambdas.
+        #       right now I don't know how to write a function call using lambdas.
+        - lambda: |-
+             auto time = id(homeassistant_time).now();
+             char garage_time[8];
+             char garage_source[7];  /* keep messages 6 characters */
+             char garage_reason[15];
+             // If both button and command times are more the 40 seconds ago,
+             //  then this must have been caused by neither, i.e. a remote.
+             if ((time.timestamp - id(g2_button_time) > 40) &&
+                 (time.timestamp - id(g2_command_time) > 40) )
+                 strncpy(garage_source, "Remote", 7);
+             else if (id(g2_button_time) - id(g2_command_time) > 0)
+                 strncpy(garage_source, "Button", 7);
+             else
+                 strncpy(garage_source, "HA_cmd", 7);
+             snprintf(garage_reason, 15, "%s (%d)", garage_source, id(g2_closures));
+
+             auto hour = time.hour;
+             int is_pm = (hour >= 12) ? 1 : 0;
+             if (hour == 0) hour = 12;
+             else if (hour > 12) hour -= 12;
+             if (time.is_valid()) {
+                snprintf(garage_time, 10, "%02d:%02d %s", hour, time.minute,
+                    is_pm ? "PM" : "AM");
+             } else {
+                snprintf(garage_time, 10, "--:--"); 
+             }
+             id(last_g2_time).publish_state(garage_time);
+             id(last_g2_reason).publish_state(garage_reason);
+
+output:
+# Each of the xxx_trig signals below activates one relay.
+# Note that the gpio_enable_relay must also be true in order to actually
+#  drive the relay (acts as a failsafe).
+  - platform: gpio
+    pin: 
+      number: D3
+      inverted: True
+    id: gpio_g1_trig
+  - platform: gpio
+    pin: 
+      number: D0
+      inverted: True
+    id: gpio_g2_trig
+  - platform: gpio
+    pin: 
+      number: D4
+      inverted: True
+    id: gpio_horn_trig
+# For a failsafe, this signal needs to be true in order for any of the
+#  relays to actually be driven.
+  - platform: gpio
+    pin: 
+      number: D1
+      inverted: False
+    id: gpio_enable_relay
+#
+#
+# The two 'cover's below are identical in function, and each represent
+#  one garage door.
+# Before closing the door, drive the 'horn' relay to honk 3 times, as a warning
+#  to whoever might be near.
+#
+cover:
+  - platform: template
+    name: "Main Garage Door"
+    lambda: |-
+      if (id(g1_is_closed).state) {
+        return COVER_CLOSED;
+      } else {
+        return COVER_OPEN;
+      }
+    open_action:
+      # Turn the switch on briefly
+      - lambda: |-
+             id(g1_command_time) = id(homeassistant_time).now().timestamp;
+      - output.turn_on: gpio_g1_trig
+      - output.turn_on: gpio_enable_relay 
+      - delay: 0.4s
+      - output.turn_off: gpio_g1_trig
+      - output.turn_off: gpio_enable_relay
+    close_action:
+      # Start with 3 horn honks first
+      - lambda: |-
+             id(g1_command_time) = id(homeassistant_time).now().timestamp;
+      - output.turn_on: gpio_horn_trig
+      - output.turn_on: gpio_enable_relay 
+      - delay: 1s
+      - output.turn_off: gpio_horn_trig
+      - delay: 0.5s
+      - output.turn_on: gpio_horn_trig
+      - delay: 1s
+      - output.turn_off: gpio_horn_trig
+      - delay: 0.5s
+      - output.turn_on: gpio_horn_trig
+      - delay: 1s
+      - output.turn_off: gpio_horn_trig
+      - output.turn_off: gpio_enable_relay
+      - delay: 0.5s
+      # Now close the door
+      - output.turn_on: gpio_g1_trig
+      - output.turn_on: gpio_enable_relay 
+      - delay: 0.4s
+      - output.turn_off: gpio_g1_trig
+      - output.turn_off: gpio_enable_relay
+    stop_action:
+      - output.turn_off: gpio_g1_trig
+      - output.turn_off: gpio_enable_relay
+    optimistic: true
+  - platform: template
+    name: "Single Garage Door"
+    lambda: |-
+      if (id(g2_is_closed).state) {
+        return COVER_CLOSED;
+      } else {
+        return COVER_OPEN;
+      }
+    open_action:
+      # Turn the switch on briefly
+      - lambda: |-
+             id(g2_command_time) = id(homeassistant_time).now().timestamp;
+      - output.turn_on: gpio_g2_trig
+      - output.turn_on: gpio_enable_relay 
+      - delay: 0.4s
+      - output.turn_off: gpio_g2_trig
+      - output.turn_off: gpio_enable_relay 
+    close_action:
+      # Start with 3 horn honks first
+      - lambda: |-
+             id(g2_command_time) = id(homeassistant_time).now().timestamp;
+      - output.turn_on: gpio_horn_trig
+      - output.turn_on: gpio_enable_relay 
+      - delay: 1s
+      - output.turn_off: gpio_horn_trig
+      - delay: 0.5s
+      - output.turn_on: gpio_horn_trig
+      - delay: 1s
+      - output.turn_off: gpio_horn_trig
+      - delay: 0.5s
+      - output.turn_on: gpio_horn_trig
+      - delay: 1s
+      - output.turn_off: gpio_horn_trig
+      - output.turn_off: gpio_enable_relay
+      - delay: 0.5s
+      # Now close the door
+      - output.turn_on: gpio_g2_trig
+      - output.turn_on: gpio_enable_relay 
+      - delay: 0.4s
+      - output.turn_off: gpio_g2_trig
+      - output.turn_off: gpio_enable_relay 
+    stop_action:
+      - output.turn_off: gpio_g2_trig
+      - output.turn_off: gpio_enable_relay 
+    optimistic: true
+status_led:
+  pin:
+    number: D8
+    inverted: False
